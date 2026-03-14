@@ -1,0 +1,258 @@
+basePath: /
+definitions:
+  notification.BatchCreateResponse:
+    properties:
+      batchId:
+        type: string
+      count:
+        type: integer
+      createdAt:
+        type: string
+    type: object
+  notification.CancelPendingResponse:
+    properties:
+      cancelledCount:
+        type: integer
+    type: object
+  notification.CreateNotificationRequest:
+    properties:
+      notifications:
+        items:
+          $ref: '#/definitions/notification.NotificationRequest'
+        minItems: 1
+        type: array
+    required:
+    - notifications
+    type: object
+  notification.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  notification.ListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/notification.NotificationResponse'
+        type: array
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  notification.NotificationRequest:
+    properties:
+      channel:
+        enum:
+        - email
+        - sms
+        - push
+        type: string
+      content:
+        type: string
+      priority:
+        enum:
+        - high
+        - medium
+        - low
+        type: string
+      recipient:
+        type: string
+    required:
+    - channel
+    - content
+    - priority
+    - recipient
+    type: object
+  notification.NotificationResponse:
+    properties:
+      batchId:
+        type: string
+      cancelledAt:
+        type: string
+      channel:
+        type: string
+      content:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: integer
+      priority:
+        type: string
+      recipient:
+        type: string
+      status:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Batch notification management and async processing API.
+  title: Notification API
+  version: "1.0"
+paths:
+  /notifications:
+    get:
+      parameters:
+      - description: Status (pending|processing|success|failure|cancelled)
+        in: query
+        name: status
+        type: string
+      - description: Channel (email|sms|push)
+        in: query
+        name: channel
+        type: string
+      - description: RFC3339 start time
+        in: query
+        name: start
+        type: string
+      - description: RFC3339 end time
+        in: query
+        name: end
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/notification.ListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+      summary: List notifications
+      tags:
+      - notifications
+  /notifications/{id}:
+    get:
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/notification.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+      summary: Get notification by ID
+      tags:
+      - notifications
+  /notifications/batch:
+    post:
+      consumes:
+      - application/json
+      description: Creates up to 1000 notifications in a single request.
+      parameters:
+      - description: Correlation ID
+        in: header
+        name: X-Correlation-ID
+        type: string
+      - description: Batch request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/notification.CreateNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/notification.BatchCreateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+      summary: Create batch notifications
+      tags:
+      - notifications
+  /notifications/batch/{batchId}:
+    get:
+      parameters:
+      - description: Batch ID
+        in: path
+        name: batchId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/notification.NotificationResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+      summary: Get notifications by batch ID
+      tags:
+      - notifications
+  /notifications/cancel:
+    patch:
+      description: Cancels every notification currently in pending status.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/notification.CancelPendingResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/notification.ErrorResponse'
+      summary: Cancel all pending notifications
+      tags:
+      - notifications
+swagger: "2.0"

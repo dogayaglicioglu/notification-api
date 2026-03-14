@@ -1,0 +1,126 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: notif-api-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notif_db
+    ports:
+      - "10000:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - notif-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: notif-api-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - notif-network
+
+  notif-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notif-api
+    environment:
+      APP_MODE: api
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: notif_db
+      SERVER_PORT: 8080
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      REDIS_CHANNEL: notifications.batch.created
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - notif-network
+    restart: unless-stopped
+
+  notif-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notif-queueWorker
+    environment:
+      APP_MODE: queueWorker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: notif_db
+      SERVER_PORT: 8081
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      REDIS_CHANNEL: notifications.batch.created
+      WORKER_CONCURRENCY: 100
+      WORKER_MAX_RETRY: 3
+      METRICS_PORT: 9091
+      EXTERNAL_PROVIDER_URL: ${EXTERNAL_PROVIDER_URL}
+    ports:
+      - "8081:8081"
+      - "9091:9091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      notif-api:
+        condition: service_started
+    networks:
+      - notif-network
+    restart: unless-stopped
+
+  notif-outbox-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notif-outbox-queueWorker
+    environment:
+      APP_MODE: outbox-worker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: notif_db
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      notif-api:
+        condition: service_started
+    networks:
+      - notif-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  notif-network:
+    driver: bridge
